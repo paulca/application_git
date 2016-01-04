@@ -72,7 +72,7 @@ module PoiseApplicationGit
     def deploy_key(val=nil)
       if val
         # Set the wrapper script if we have a deploy key.
-        ssh_wrapper(ssh_wrapper_path) if !ssh_wrapper
+        ssh_wrapper(lazy{ssh_wrapper_path}) if !ssh_wrapper
         # Also use a SafeString for literal deploy keys so they aren't shown.
         val = SafeString.new(val) unless deploy_key_is_local?(val)
       end
@@ -144,7 +144,8 @@ module PoiseApplicationGit
     #
     # @return [void]
     def create_dotssh
-      directory ::File.expand_path("~#{new_resource.user}/.ssh") do
+      directory('ssh_dir') do
+        path lazy { ::File.expand_path("~#{new_resource.user}/.ssh") }
         owner new_resource.user
         group new_resource.group
         mode '755'
@@ -155,13 +156,14 @@ module PoiseApplicationGit
     #
     # @return [void]
     def write_deploy_key
-      # Check if we have a local path or some actual content
       return if new_resource.deploy_key_is_local?
-      file new_resource.deploy_key_path do
+      # Check if we have a local path or some actual content
+      file('deploy_key') do
+        path lazy { new_resource.deploy_key_path }
         owner new_resource.user
         group new_resource.group
         mode '600'
-        content new_resource.deploy_key
+        content lazy { new_resource.deploy_key }
         sensitive true
       end
     end
@@ -171,11 +173,12 @@ module PoiseApplicationGit
     # @return [void]
     def write_ssh_wrapper
       # Write out the GIT_SSH script, it should already be enabled above
-      file new_resource.ssh_wrapper_path do
+      file 'ssh_wrapper' do
+        path lazy { new_resource.ssh_wrapper_path } 
         owner new_resource.user
         group new_resource.group
         mode '700'
-        content %Q{#!/bin/sh\n/usr/bin/env ssh #{'-o "StrictHostKeyChecking=no" ' unless new_resource.strict_ssh}-i "#{new_resource.deploy_key_path}" $@\n}
+        content lazy { %Q{#!/bin/sh\n/usr/bin/env ssh #{'-o "StrictHostKeyChecking=no" ' unless new_resource.strict_ssh}-i "#{new_resource.deploy_key_path}" $@\n} }
       end
     end
 
